@@ -40,55 +40,50 @@ public class TwitterToELKMain {
     private void run() {
 
         //set up twitter client
-        BlockingQueue<String> queue = new LinkedBlockingQueue<String>(1000);
+        BlockingQueue<String> queue = new LinkedBlockingQueue<>(1000);
         Client client = getTwitterClient(queue);
 
         // Establish a connection
         client.connect();
 
         // add all necessary kafka properties
-        KafkaProducer<String, String> producer = getKafkaProducer();
 
         // add shutdown hook
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            logger.info("Shutdown hook called..");
-            logger.info("shutting down twitter client...");
-            client.stop();
-            logger.info("Client is stopped!");
-            logger.info("Closing Kafka Producer...");
-            producer.close();
-            logger.info("Producer is closed!");
-        }));
 
         // read twitter messages and write them to Kafka
-        try {
+        try (KafkaProducer<String, String> producer = getKafkaProducer()) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                logger.info("Shutdown hook called..");
+                logger.info("shutting down twitter client...");
+                client.stop();
+                logger.info("Client is stopped!");
+                logger.info("Closing Kafka Producer...");
+                producer.close();
+                logger.info("Producer is closed!");
+            }));
             int msgRead = 0;
-            while(!client.isDone()) {
+            while (!client.isDone()) {
                 String msg;
                 msg = queue.poll(5, TimeUnit.SECONDS);
 
-                if(msg != null){
+                if (msg != null) {
                     msgRead++;
                     logger.debug(msg);
                     producer.send(new ProducerRecord<>(producerProps.getString(KAFKA_TOPIC),
                             String.valueOf(msgRead), msg), (metadata, exception) -> {
-                        if(exception != null){
+                        if (exception != null) {
                             exception.printStackTrace();
                             producer.close();
-                        }
-                        else
+                        } else
                             logger.info("Partition - Offset = partition-" + metadata.partition() + "-" + metadata.offset());
                     });
                     producer.flush();
                 }
             }
-        }
-        catch (InterruptedException e) {
+        } catch (InterruptedException e) {
             e.printStackTrace();
-        }
-        finally {
+        } finally {
             client.stop();
-            producer.close();
         }
     }
 
@@ -99,6 +94,11 @@ public class TwitterToELKMain {
         properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.setProperty(ProducerConfig.ACKS_CONFIG, producerProps.getString(ACKS));
         properties.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, producerProps.getString(COMPRESSION_TYPE));
+        // safe producer settings
+        properties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        properties.setProperty(ProducerConfig.ACKS_CONFIG, "all");
+        properties.setProperty(ProducerConfig.RETRIES_CONFIG, String.valueOf(Integer.MAX_VALUE));
+        properties.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
 
         // return Producer Instance
         return new KafkaProducer<>(properties);
