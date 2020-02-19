@@ -1,4 +1,4 @@
-package com.github.vikasgautam18;
+package vikasgautam18.producer;
 
 import com.google.common.collect.Lists;
 import com.twitter.hbc.ClientBuilder;
@@ -20,21 +20,21 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import static com.github.vikasgautam18.Constants.*;
+import static vikasgautam18.commons.Constants.*;
 
-public class TwitterToELKMain {
+public class TwitterProducer {
     private static ResourceBundle producerProps = ResourceBundle.getBundle("producer");
-    private static Logger logger = LoggerFactory.getLogger(TwitterToELKMain.class.getName());
+    private static Logger logger = LoggerFactory.getLogger(TwitterProducer.class.getName());
     private final String apiKey = producerProps.getString(API_KEY);
     private final String apiKeySecret = producerProps.getString(API_KEY_SECRET);
     private final String accessToken = producerProps.getString(ACCESS_TOKEN);
     private final String accessTokenSecret = producerProps.getString(ACCESS_TOKEN_SECRET);
     private final ArrayList<String> terms = Lists.newArrayList("SachinTendulkar", "SidNaaz");
 
-    public TwitterToELKMain() {}
+    public TwitterProducer() {}
 
     public static void main(String[] args) {
-        new TwitterToELKMain().run();
+        new TwitterProducer().run();
     }
 
     private void run() {
@@ -46,12 +46,10 @@ public class TwitterToELKMain {
         // Establish a connection
         client.connect();
 
-        // add all necessary kafka properties
-
-        // add shutdown hook
 
         // read twitter messages and write them to Kafka
         try (KafkaProducer<String, String> producer = getKafkaProducer()) {
+            // add shutdown hook
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 logger.info("Shutdown hook called..");
                 logger.info("shutting down twitter client...");
@@ -89,6 +87,9 @@ public class TwitterToELKMain {
 
     private KafkaProducer<String, String> getKafkaProducer() {
         Properties properties = new Properties();
+
+        // add all necessary kafka properties
+
         properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, producerProps.getString(BOOTSTRAP_SERVERS));
         properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());

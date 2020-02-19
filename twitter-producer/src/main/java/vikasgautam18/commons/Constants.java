@@ -1,4 +1,4 @@
-package com.github.vikasgautam18;
+package vikasgautam18.commons;
 
 public class Constants {
     public static final String BOOTSTRAP_SERVERS = "bootstrap.servers";
@@ -11,6 +11,7 @@ public class Constants {
     public static final String API_KEY_SECRET = "twitter.apiKeySecret";
     public static final String ACCESS_TOKEN = "twitter.accessToken";
     public static final String ACCESS_TOKEN_SECRET = "twitter.accessTokenSecret";
+
 
 
 }
