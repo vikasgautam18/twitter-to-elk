@@ -29,7 +29,7 @@ public class TwitterProducer {
     private final String apiKeySecret = producerProps.getString(API_KEY_SECRET);
     private final String accessToken = producerProps.getString(ACCESS_TOKEN);
     private final String accessTokenSecret = producerProps.getString(ACCESS_TOKEN_SECRET);
-    private final ArrayList<String> terms = Lists.newArrayList("SachinTendulkar", "SidNaaz");
+    private final ArrayList<String> terms = Lists.newArrayList("DonaldTrump");
 
     public TwitterProducer() {}
 
