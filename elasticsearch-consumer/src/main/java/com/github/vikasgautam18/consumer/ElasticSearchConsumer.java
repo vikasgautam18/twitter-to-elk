@@ -10,8 +10,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.elasticsearch.action.bulk.BulkItemResponse;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
@@ -55,10 +57,10 @@ public class ElasticSearchConsumer {
         properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, consumerProps.getString(BOOTSTRAP_SERVERS));
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, consumerProps.getString(GRP_ID_PREFIX)+"twitter2elk20Feb1");
+        properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, consumerProps.getString(GRP_ID_PREFIX)+"twitter2elk20Feb4");
         properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        properties.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "10");
+        properties.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "100");
 
         // create consumer
         KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(properties);
@@ -73,26 +75,46 @@ public class ElasticSearchConsumer {
 
         KafkaConsumer<String, String> consumer = createConsumer(consumerProps.getString(KAFKA_TOPIC));
 
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            logger.info("Shutdown hook called..");
+            logger.info("shutting down Kafka Consumer... ");
+            consumer.close();
+            logger.info("Kafka Consumer closed... ");
+            logger.info("closing ELK client... ");
+            try {
+                client.close();
+            } catch (IOException e) {
+                logger.error("Error closing ELK client... ", e);
+            }
+            logger.info("ELK client closed... ");
+        }));
         //TODO - fix while
         while (true){
+            BulkRequest bulkRequest = new BulkRequest();
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
-            logger.info("found "+ records.count() + " records... writing them to ElasticSearch");
+            logger.info("found "+ records.count() + " records...");
             for (ConsumerRecord<String, String> record : records) {
                 try{
                     IndexRequest indexRequest = new IndexRequest("twitter")
                             .source(record.value(), XContentType.JSON)
                             .id(getGenericId(record));
 
-                    IndexResponse indexResponse = client.index(indexRequest, RequestOptions.DEFAULT);
-                    String id = indexResponse.getId();
-                    logger.info("record with id : " + id + " written to ElasticSearch");
+                    bulkRequest.add(indexRequest);
+
                 } catch (Exception e){
                     e.printStackTrace();
                 }
             }
-            logger.info("Commiting Offsets...");
-            consumer.commitSync();
-            logger.info("Offsets committed...");
+            if(bulkRequest.numberOfActions() > 0) {
+                logger.info("writing " + bulkRequest.numberOfActions() + " records to ElasticSearch... ");
+                BulkResponse bulkResponse = client.bulk(bulkRequest, RequestOptions.DEFAULT);
+                for (BulkItemResponse item : bulkResponse.getItems()) {
+                    logger.info("Record with Id " + item.getId() + " was added to ElasticSearch !");
+                }
+                logger.info("Commiting Offsets...");
+                consumer.commitSync();
+                logger.info("Offsets committed...");
+            }
 
             try {
                 Thread.sleep(1000);
